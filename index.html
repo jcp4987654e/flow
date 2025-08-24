@@ -47,6 +47,9 @@
         #avatar-container:hover {
             transform: scale(1.05);
         }
+        .cell-selected {
+            background-color: rgba(var(--color-primary), 0.2) !important;
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-700 dark:bg-slate-900 dark:text-slate-300">
@@ -56,7 +59,13 @@
 
         <!-- Barra lateral de Navegación -->
         <aside class="bg-white dark:bg-slate-800 w-full lg:w-64 p-6 border-b lg:border-r border-slate-200 dark:border-slate-700 flex-shrink-0 flex flex-col">
-            <h1 class="text-2xl font-bold text-[rgb(var(--color-primary-accent))]">FocusFlow</h1>
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-[rgb(var(--color-primary-accent))]">FocusFlow</h1>
+                <button id="fullscreen-toggle" class="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700">
+                    <svg id="icon-enter-fullscreen" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v3A1.5 1.5 0 004.5 8h3A1.5 1.5 0 009 6.5v-3A1.5 1.5 0 007.5 2h-3zM3 10a.5.5 0 01.5.5v3a.5.5 0 00.5.5h3a.5.5 0 010 1h-3A1.5 1.5 0 013 13.5v-3a.5.5 0 01.5-.5zM10 3.5a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3a.5.5 0 01-1 0v-3a.5.5 0 00-.5-.5h-3a.5.5 0 01-.5-.5zM15 10a.5.5 0 01.5.5v3a.5.5 0 01-.5.5h-3a.5.5 0 010-1h3a.5.5 0 00.5-.5v-3a.5.5 0 01.5-.5z" clip-rule="evenodd" /></svg>
+                    <svg id="icon-exit-fullscreen" class="h-5 w-5 hidden" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 6.5A1.5 1.5 0 014.5 5h3A1.5 1.5 0 019 6.5v3A1.5 1.5 0 017.5 11h-3A1.5 1.5 0 013 9.5v-3zM14.5 3a.5.5 0 01.5.5v3a.5.5 0 01-1 0v-3a.5.5 0 00-.5-.5h-3a.5.5 0 010-1h3a1.5 1.5 0 011.5 1.5zM4.5 10a.5.5 0 01.5.5v3a.5.5 0 01-1 0v-3a.5.5 0 00-.5-.5h-3a.5.5 0 010-1h3a1.5 1.5 0 011.5 1.5zM10 14.5a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3a.5.5 0 01-1 0v-3a.5.5 0 00-.5-.5h-3a.5.5 0 01-.5-.5z" clip-rule="evenodd" /></svg>
+                </button>
+            </div>
             <nav class="mt-8 flex-grow">
                 <h2 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Vistas</h2>
                 <div class="mt-4 space-y-2">
@@ -96,10 +105,6 @@
                         <button id="dark-mode-toggle" class="w-6 h-6 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700">
                             <svg class="h-4 w-4 text-slate-600 dark:text-slate-300" id="moon-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" /></svg>
                             <svg class="h-4 w-4 text-slate-600 dark:text-slate-300 hidden" id="sun-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 14.464A1 1 0 106.465 13.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm-1.414-2.12a1 1 0 011.414 0l.707.707a1 1 0 11-1.414 1.414l-.707-.707a1 1 0 010-1.414zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z" clip-rule="evenodd" /></svg>
-                        </button>
-                        <button id="fullscreen-toggle" class="w-6 h-6 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700">
-                            <svg id="icon-enter-fullscreen" class="h-4 w-4 text-slate-600 dark:text-slate-300" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v3A1.5 1.5 0 004.5 8h3A1.5 1.5 0 009 6.5v-3A1.5 1.5 0 007.5 2h-3zM3 10a.5.5 0 01.5.5v3a.5.5 0 00.5.5h3a.5.5 0 010 1h-3A1.5 1.5 0 013 13.5v-3a.5.5 0 01.5-.5zM10 3.5a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3a.5.5 0 01-1 0v-3a.5.5 0 00-.5-.5h-3a.5.5 0 01-.5-.5zM15 10a.5.5 0 01.5.5v3a.5.5 0 01-.5.5h-3a.5.5 0 010-1h3a.5.5 0 00.5-.5v-3a.5.5 0 01.5-.5z" clip-rule="evenodd" /></svg>
-                            <svg id="icon-exit-fullscreen" class="h-4 w-4 text-slate-600 dark:text-slate-300 hidden" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 6.5A1.5 1.5 0 014.5 5h3A1.5 1.5 0 019 6.5v3A1.5 1.5 0 017.5 11h-3A1.5 1.5 0 013 9.5v-3zM14.5 3a.5.5 0 01.5.5v3a.5.5 0 01-1 0v-3a.5.5 0 00-.5-.5h-3a.5.5 0 010-1h3a1.5 1.5 0 011.5 1.5zM4.5 10a.5.5 0 01.5.5v3a.5.5 0 01-1 0v-3a.5.5 0 00-.5-.5h-3a.5.5 0 010-1h3a1.5 1.5 0 011.5 1.5zM10 14.5a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3a.5.5 0 01-1 0v-3a.5.5 0 00-.5-.5h-3a.5.5 0 01-.5-.5z" clip-rule="evenodd" /></svg>
                         </button>
                     </div>
                 </div>
@@ -343,7 +348,7 @@
                     const day = new Date(startOfWeek);
                     day.setDate(day.getDate() + d);
                     const dateString = day.toISOString().split('T')[0];
-                    gridHTML += `<div class="schedule-cell border-r border-b border-slate-100 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" data-date="${dateString}" data-time="${time}"></div>`;
+                    gridHTML += `<div class="schedule-cell border-r border-b border-slate-100 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" data-date="${dateString}" data-time="${time}" data-day-index="${d}" data-time-index="${i}"></div>`;
                 }
             }
 
@@ -368,7 +373,7 @@
             const topPosition = (nowMinutes / (24 * 60)) * (48 * 40);
             const timeIndicatorHTML = `<div class="time-indicator absolute h-0.5 bg-rose-500" style="top: ${topPosition}px;"></div>`;
 
-            mainContent.innerHTML = renderHeader('Horarios de la Semana', 'Planifica tus tareas y eventos', [{type: 'export', view: 'schedule'}]) + `<div id="export-content" class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-lg overflow-auto" style="height: 70vh;"><div class="schedule-grid relative">${gridHTML}${tasksHTML}${timeIndicatorHTML}</div></div>`;
+            mainContent.innerHTML = renderHeader('Horarios de la Semana', 'Planifica tus tareas y eventos', [{type: 'export', view: 'schedule'}]) + `<div id="export-content" class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-lg overflow-auto" style="height: 70vh;"><div id="schedule-grid-container" class="schedule-grid relative">${gridHTML}${tasksHTML}${timeIndicatorHTML}</div></div>`;
         }
 
         function renderGoalsView() {
@@ -619,7 +624,7 @@
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <input type="date" id="taskDate" value="${task?.date || prefill.date || new Date().toISOString().split('T')[0]}" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700 col-span-1">
                         <input type="time" id="taskStartTime" step="1800" value="${task?.startTime || prefill.startTime || ''}" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700">
-                        <input type="time" id="taskEndTime" step="1800" value="${task?.endTime || ''}" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700">
+                        <input type="time" id="taskEndTime" step="1800" value="${task?.endTime || prefill.endTime || ''}" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700">
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <select id="taskCategory" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700"><option value="">Categoría</option>${categoryOptions}</select>
@@ -680,6 +685,63 @@
         }
 
         // --- LÓGICA DE EVENTOS ---
+        let isSelecting = false;
+        let selectionStartCell = null;
+
+        document.body.addEventListener('mousedown', (e) => {
+            if (e.target.matches('.schedule-cell')) {
+                isSelecting = true;
+                selectionStartCell = e.target;
+                document.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
+                e.target.classList.add('cell-selected');
+            }
+        });
+
+        document.body.addEventListener('mouseover', (e) => {
+            if (isSelecting && e.target.matches('.schedule-cell')) {
+                document.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
+                const startDay = parseInt(selectionStartCell.dataset.dayIndex);
+                const startTime = parseInt(selectionStartCell.dataset.timeIndex);
+                const endDay = parseInt(e.target.dataset.dayIndex);
+                const endTime = parseInt(e.target.dataset.timeIndex);
+
+                const minDay = Math.min(startDay, endDay);
+                const maxDay = Math.max(startDay, endDay);
+                const minTime = Math.min(startTime, endTime);
+                const maxTime = Math.max(startTime, endTime);
+
+                for (let d = minDay; d <= maxDay; d++) {
+                    for (let t = minTime; t <= maxTime; t++) {
+                        const cell = document.querySelector(`.schedule-cell[data-day-index='${d}'][data-time-index='${t}']`);
+                        if (cell) cell.classList.add('cell-selected');
+                    }
+                }
+            }
+        });
+
+        document.body.addEventListener('mouseup', (e) => {
+            if (isSelecting) {
+                isSelecting = false;
+                const selected = document.querySelectorAll('.cell-selected');
+                if (selected.length > 0) {
+                    const firstCell = selected[0];
+                    const lastCell = selected[selected.length - 1];
+                    const startTime = firstCell.dataset.time;
+                    const date = firstCell.dataset.date;
+                    
+                    const lastTimeIndex = parseInt(lastCell.dataset.timeIndex);
+                    const endHour = Math.floor((lastTimeIndex + 1) / 2);
+                    const endMinute = (lastTimeIndex + 1) % 2 === 0 ? '00' : '30';
+                    const endTime = `${String(endHour).padStart(2, '0')}:${endMinute}`;
+
+                    openTaskModal(null, { date, startTime, endTime });
+                }
+                setTimeout(() => {
+                    document.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
+                }, 100);
+            }
+        });
+        
         document.body.addEventListener('click', (e) => {
             // Modales
             if (e.target.matches('.close-modal-btn')) closeModal();
@@ -766,10 +828,6 @@
                 closeModal();
                 renderAll();
              }
-            if (e.target.closest('.schedule-cell')) {
-                const cell = e.target.closest('.schedule-cell');
-                openTaskModal(null, { date: cell.dataset.date, startTime: cell.dataset.time });
-            }
             if (e.target.closest('.task-block')) {
                 const task = tasks.find(t => t.id == e.target.closest('.task-block').dataset.taskId);
                 openTaskModal(task);
