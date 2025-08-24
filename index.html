@@ -97,6 +97,10 @@
                             <svg class="h-4 w-4 text-slate-600 dark:text-slate-300" id="moon-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" /></svg>
                             <svg class="h-4 w-4 text-slate-600 dark:text-slate-300 hidden" id="sun-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 14.464A1 1 0 106.465 13.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm-1.414-2.12a1 1 0 011.414 0l.707.707a1 1 0 11-1.414 1.414l-.707-.707a1 1 0 010-1.414zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z" clip-rule="evenodd" /></svg>
                         </button>
+                        <button id="fullscreen-toggle" class="w-6 h-6 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700">
+                            <svg id="icon-enter-fullscreen" class="h-4 w-4 text-slate-600 dark:text-slate-300" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v3A1.5 1.5 0 004.5 8h3A1.5 1.5 0 009 6.5v-3A1.5 1.5 0 007.5 2h-3zM3 10a.5.5 0 01.5.5v3a.5.5 0 00.5.5h3a.5.5 0 010 1h-3A1.5 1.5 0 013 13.5v-3a.5.5 0 01.5-.5zM10 3.5a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3a.5.5 0 01-1 0v-3a.5.5 0 00-.5-.5h-3a.5.5 0 01-.5-.5zM15 10a.5.5 0 01.5.5v3a.5.5 0 01-.5.5h-3a.5.5 0 010-1h3a.5.5 0 00.5-.5v-3a.5.5 0 01.5-.5z" clip-rule="evenodd" /></svg>
+                            <svg id="icon-exit-fullscreen" class="h-4 w-4 text-slate-600 dark:text-slate-300 hidden" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 6.5A1.5 1.5 0 014.5 5h3A1.5 1.5 0 019 6.5v3A1.5 1.5 0 017.5 11h-3A1.5 1.5 0 013 9.5v-3zM14.5 3a.5.5 0 01.5.5v3a.5.5 0 01-1 0v-3a.5.5 0 00-.5-.5h-3a.5.5 0 010-1h3a1.5 1.5 0 011.5 1.5zM4.5 10a.5.5 0 01.5.5v3a.5.5 0 01-1 0v-3a.5.5 0 00-.5-.5h-3a.5.5 0 010-1h3a1.5 1.5 0 011.5 1.5zM10 14.5a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3a.5.5 0 01-1 0v-3a.5.5 0 00-.5-.5h-3a.5.5 0 01-.5-.5z" clip-rule="evenodd" /></svg>
+                        </button>
                     </div>
                 </div>
                 <button id="deleteAllBtn" class="w-full text-rose-500 flex items-center justify-center px-3 py-2 rounded-md font-medium hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors">
@@ -805,6 +809,11 @@
             if(e.target.closest('.export-pdf-btn')) {
                 exportViewAsPDF(e.target.closest('.export-pdf-btn').dataset.view);
             }
+            
+            // Pantalla Completa
+            if (e.target.closest('#fullscreen-toggle')) {
+                toggleFullScreen();
+            }
         });
 
         modalContainer.addEventListener('submit', (e) => {
@@ -882,7 +891,6 @@
                 useCORS: true,
                 backgroundColor: htmlEl.classList.contains('dark') ? '#0f172a' : '#f8fafc',
                 onclone: (document) => {
-                    // Re-apply dark mode to the cloned document for rendering
                     if (htmlEl.classList.contains('dark')) {
                         document.documentElement.classList.add('dark');
                     }
@@ -907,6 +915,22 @@
                 document.body.removeChild(pdfSpinner);
             });
         }
+        
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+        
+        document.addEventListener('fullscreenchange', () => {
+            const isFullscreen = !!document.fullscreenElement;
+            document.getElementById('icon-enter-fullscreen').classList.toggle('hidden', isFullscreen);
+            document.getElementById('icon-exit-fullscreen').classList.toggle('hidden', !isFullscreen);
+        });
 
         // --- INICIALIZAR LA APP ---
         init();
