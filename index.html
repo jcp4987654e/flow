@@ -33,7 +33,7 @@
         .animate-fadeIn { animation: fadeIn 0.4s ease-out forwards; }
         .schedule-grid {
             display: grid;
-            grid-template-columns: 60px repeat(7, 1fr);
+            grid-template-columns: 50px repeat(7, minmax(100px, 1fr)); /* Min width for columns */
             grid-template-rows: auto repeat(48, 40px);
             user-select: none;
         }
@@ -51,7 +51,7 @@
             position: relative;
             overflow: hidden;
             white-space: nowrap;
-            padding: 2px 4px; /* Added padding */
+            padding: 2px 4px; 
         }
         .schedule-cell:focus, .schedule-cell.selected {
             outline: 2px solid rgb(var(--color-primary-accent));
@@ -105,14 +105,29 @@
             right: -2px;
             cursor: crosshair;
             z-index: 20;
-            display: none; /* Hidden by default */
+            display: none;
         }
         .schedule-cell.selected .fill-handle {
-            display: block; /* Show on selected cell */
+            display: block;
         }
         .cell-highlight-fill {
             box-shadow: inset 0 0 0 2px rgb(var(--color-primary-accent));
             background-color: rgba(var(--color-primary), 0.1);
+        }
+        .progress-circle-bg {
+            fill: none;
+            stroke: #e2e8f0; /* slate-200 */
+        }
+        .dark .progress-circle-bg {
+            stroke: #334155; /* slate-700 */
+        }
+        .progress-circle-fg {
+            fill: none;
+            stroke: rgb(var(--color-primary-accent));
+            stroke-linecap: round;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+            transition: stroke-dashoffset 0.5s ease-out;
         }
     </style>
 </head>
@@ -184,15 +199,14 @@
         </aside>
 
         <!-- Contenido Principal -->
-        <main class="flex-1 p-4 sm:p-6 lg:p-8">
+        <main class="flex-1 p-4 sm:p-6 lg:p-8 pb-24">
             <div id="main-content" class="animate-fadeIn"></div>
         </main>
     </div>
 
     <!-- Modales y elementos flotantes -->
     <div id="modal-container"></div>
-    <!-- MODIFICADO: Clases para centrar el avatar -->
-    <div id="avatar-container" class="fixed bottom-5 left-1/2 -translate-x-1/2 flex items-end space-x-2 cursor-pointer"></div>
+    <div id="avatar-container" class="fixed bottom-5 left-1/2 -translate-x-1/2 flex items-end space-x-2 cursor-pointer z-40"></div>
     <div id="context-menu-container"></div>
 
 
@@ -342,7 +356,7 @@
         }
         
         // --- RENDERIZADO DE VISTAS ---
-        function renderHeader(title, subtitle, actions = []) {
+        function renderHeader(title, subtitle, actions = [], progress = null) {
              const buttonsHTML = actions.map(action => {
                  if (action.type === 'add') {
                      return `<button class="add-context-btn bg-[rgb(var(--color-primary-accent))] text-white flex items-center px-4 py-2 rounded-md font-medium hover:opacity-90 transition-all hover:scale-105 shadow-md hover:shadow-lg">
@@ -359,13 +373,18 @@
                  return '';
              }).join('');
 
+            const progressHTML = progress !== null ? createProgressCircle(progress) : '';
+
             return `
-                <header id="view-header" class="view-header mb-6 bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg flex items-center justify-between animate-fadeInUp">
-                    <div>
-                        <h2 class="text-3xl font-bold">${title}</h2>
-                        <p class="text-slate-500 dark:text-slate-400">${subtitle}</p>
+                <header id="view-header" class="view-header mb-6 bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between animate-fadeInUp">
+                    <div class="flex items-center">
+                        ${progressHTML}
+                        <div class="${progress !== null ? 'ml-4' : ''}">
+                            <h2 class="text-2xl sm:text-3xl font-bold">${title}</h2>
+                            <p class="text-slate-500 dark:text-slate-400 mt-1">${subtitle}</p>
+                        </div>
                     </div>
-                    <div class="flex items-center space-x-2">${buttonsHTML}</div>
+                    <div class="flex items-center space-x-2 mt-4 sm:mt-0 self-end sm:self-center">${buttonsHTML}</div>
                 </header>
             `;
         }
@@ -373,11 +392,12 @@
         function renderDailyView() {
             const todayStr = new Date().toISOString().split('T')[0];
             const todaysTasks = tasks.filter(t => t.date === todayStr);
+            const progress = calculateWeightedProgress(todaysTasks);
             let tasksHTML = todaysTasks.length > 0 
                 ? todaysTasks.sort((a,b) => (a.startTime || '23:59').localeCompare(b.startTime || '23:59')).map(createTaskCard).join('') 
                 : `<div class="text-center py-10 px-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm"><h3 class="text-lg font-medium">¡Todo despejado por hoy!</h3><p class="text-slate-500 dark:text-slate-400 mt-2">Añade una nueva tarea para empezar.</p></div>`;
             
-            mainContent.innerHTML = renderHeader('Agenda de Hoy', new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }), [{type: 'export', view: 'daily'}, {type: 'add', text: 'Añadir Tarea'}]) + `<div id="export-content" class="space-y-4 animate-fadeInUp" style="animation-delay: 100ms;">${tasksHTML}</div>`;
+            mainContent.innerHTML = renderHeader('Agenda de Hoy', new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }), [{type: 'export', view: 'daily'}, {type: 'add', text: 'Añadir Tarea'}], progress) + `<div id="export-content" class="space-y-4 animate-fadeInUp" style="animation-delay: 100ms;">${tasksHTML}</div>`;
         }
         
         function renderWeeklyView() {
@@ -391,19 +411,22 @@
             endOfWeek.setDate(startOfWeek.getDate() + 6);
             endOfWeek.setHours(23, 59, 59, 999);
             
+            let weekTasks = [];
             let weekHTML = '';
             for (let i = 0; i < 7; i++) {
                 const day = new Date(startOfWeek);
                 day.setDate(day.getDate() + i);
                 const dayString = day.toISOString().split('T')[0];
                 const dayTasks = tasks.filter(t => t.date === dayString);
+                weekTasks.push(...dayTasks);
                 
                 const tasksHTML = dayTasks.length > 0 ? dayTasks.sort((a,b) => (a.startTime || '23:59').localeCompare(b.startTime || '23:59')).map(createTaskCard).join('') : '<p class="text-sm text-slate-500 dark:text-slate-400 mt-2">Sin tareas.</p>';
 
                 weekHTML += `<div class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md"><h3 class="font-bold">${day.toLocaleDateString('es-ES', { weekday: 'long' })}</h3><p class="text-sm text-slate-500 dark:text-slate-400 mb-4">${day.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}</p><div class="space-y-3">${tasksHTML}</div></div>`;
             }
             
-            mainContent.innerHTML = renderHeader('Vista Semanal', `Del ${startOfWeek.toLocaleDateString('es-ES')} al ${endOfWeek.toLocaleDateString('es-ES')}`, [{type: 'export', view: 'weekly'}, {type: 'add', text: 'Añadir Tarea'}]) + `<div id="export-content" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-fadeInUp" style="animation-delay: 100ms;">${weekHTML}</div>`;
+            const progress = calculateWeightedProgress(weekTasks);
+            mainContent.innerHTML = renderHeader('Vista Semanal', `Del ${startOfWeek.toLocaleDateString('es-ES')} al ${endOfWeek.toLocaleDateString('es-ES')}`, [{type: 'export', view: 'weekly'}, {type: 'add', text: 'Añadir Tarea'}], progress) + `<div id="export-content" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-fadeInUp" style="animation-delay: 100ms;">${weekHTML}</div>`;
         }
         
         function renderMonthlyView() {
@@ -413,26 +436,32 @@
             const firstDayOfMonth = (new Date(year, month, 1).getDay() + 6) % 7; // Lunes = 0
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             
+            const monthTasks = tasks.filter(t => {
+                const taskDate = new Date(t.date);
+                return taskDate.getMonth() === month && taskDate.getFullYear() === year;
+            });
+
             let calendarHTML = '<div class="grid grid-cols-7 gap-1">';
-            const weekdays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-            weekdays.forEach(day => { calendarHTML += `<div class="text-center font-semibold text-sm text-slate-600 dark:text-slate-400 py-2">${day}</div>`; });
+            const weekdays = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do'];
+            weekdays.forEach(day => { calendarHTML += `<div class="text-center font-semibold text-xs text-slate-600 dark:text-slate-400 py-2">${day}</div>`; });
             for (let i = 0; i < firstDayOfMonth; i++) { calendarHTML += '<div></div>'; }
             for (let day = 1; day <= daysInMonth; day++) {
                 const dateString = new Date(year, month, day).toISOString().split('T')[0];
                 const dayTasks = tasks.filter(t => t.date === dateString);
-                const taskDots = dayTasks.slice(0, 4).map(t => `<div class="w-1.5 h-1.5 rounded-full" style="background-color: ${CATEGORIES[t.category]?.color || '#64748b'}"></div>`).join('');
-                calendarHTML += `<div class="border border-slate-200 dark:border-slate-700 rounded-md p-2 h-28 flex flex-col ${dateString === new Date().toISOString().split('T')[0] ? 'bg-slate-100 dark:bg-slate-700/50' : 'bg-white dark:bg-slate-800'}"><span class="font-medium text-sm">${day}</span><div class="flex-grow mt-1 space-x-1 flex items-end flex-wrap">${taskDots}</div></div>`;
+                const taskDots = dayTasks.slice(0, 3).map(t => `<div class="w-1.5 h-1.5 rounded-full" style="background-color: ${CATEGORIES[t.category]?.color || '#64748b'}"></div>`).join('');
+                calendarHTML += `<div class="border border-slate-200 dark:border-slate-700 rounded-md p-1 sm:p-2 h-20 sm:h-24 flex flex-col ${dateString === new Date().toISOString().split('T')[0] ? 'bg-slate-100 dark:bg-slate-700/50' : 'bg-white dark:bg-slate-800'}"><span class="font-medium text-xs sm:text-sm">${day}</span><div class="flex-grow mt-1 space-x-1 flex items-end flex-wrap">${taskDots}</div></div>`;
             }
             calendarHTML += '</div>';
             
-            mainContent.innerHTML = renderHeader(new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }), 'Vista Mensual', [{type: 'export', view: 'monthly'}, {type: 'add', text: 'Añadir Tarea'}]) + `<div id="export-content" class="animate-fadeInUp" style="animation-delay: 100ms;">${calendarHTML}</div>`;
+            const progress = calculateWeightedProgress(monthTasks);
+            mainContent.innerHTML = renderHeader(new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }), 'Vista Mensual', [{type: 'export', view: 'monthly'}, {type: 'add', text: 'Añadir Tarea'}], progress) + `<div id="export-content" class="animate-fadeInUp" style="animation-delay: 100ms;">${calendarHTML}</div>`;
         }
 
         function renderScheduleView() {
             let gridHTML = '<div class="sticky top-0 bg-white dark:bg-slate-800 z-10"></div>'; // Placeholder for time column
             const weekdays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
             weekdays.forEach(day => {
-                gridHTML += `<div class="sticky top-0 bg-white dark:bg-slate-800 z-10 text-center p-2 border-b border-slate-200 dark:border-slate-700"><p class="font-semibold text-sm">${day}</p></div>`;
+                gridHTML += `<div class="sticky top-0 bg-white dark:bg-slate-800 z-10 text-center p-2 border-b border-slate-200 dark:border-slate-700"><p class="font-semibold text-sm">${day.substring(0,3)}</p></div>`;
             });
 
             for (let i = 0; i < 48; i++) { // 48 slots de 30 minutos
@@ -448,7 +477,7 @@
                     const text = cellData?.text || '';
                     const bgColor = cellData?.bgColor || 'transparent';
                     const fontSize = cellData?.fontSize || '12px';
-                    const textColor = cellData?.textColor || 'inherit'; // NUEVO: Color de letra
+                    const textColor = cellData?.textColor || 'inherit';
 
                     gridHTML += `
                         <div class="schedule-cell border-r border-b border-slate-100 dark:border-slate-700 text-xs" 
@@ -491,7 +520,7 @@
                 <div id="export-content" class="flex flex-col items-center justify-center bg-white dark:bg-slate-800 p-8 rounded-lg shadow-lg animate-fadeInUp">
                     <div class="text-center">
                         <p class="text-lg font-medium text-slate-500 dark:text-slate-400">${pomodoro.mode === 'work' ? 'Tiempo de Enfoque' : 'Tiempo de Descanso'}</p>
-                        <p id="pomo-display-time" class="text-8xl font-bold font-mono my-4">${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}</p>
+                        <p id="pomo-display-time" class="text-7xl sm:text-8xl font-bold font-mono my-4">${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}</p>
                     </div>
                     <div class="flex space-x-4 my-6">
                         <button id="pomo-start-pause" class="px-8 py-3 text-lg rounded-md bg-[rgb(var(--color-primary-accent))] text-white font-semibold shadow-lg hover:opacity-90 transition-transform hover:scale-105">${pomodoro.isActive ? 'Pausa' : 'Iniciar'}</button>
@@ -1109,7 +1138,6 @@
             });
         }
         
-        // MODIFICADO: Modal para editar celda ahora incluye color de letra y emojis
         function openScheduleCellModal(cell) {
             const key = cell.dataset.key;
             const cellData = scheduleData[key] || {};
@@ -1151,7 +1179,6 @@
             `;
             openModal(modalContent);
 
-            // Añadir listeners para los nuevos elementos del modal
             document.querySelectorAll('.emoji-btn').forEach(btn => {
                 btn.onclick = () => {
                     const textInput = document.getElementById('cellText');
@@ -1189,6 +1216,36 @@
         function updateCellData(key, newData) {
             scheduleData[key] = { ...(scheduleData[key] || {}), ...newData };
         }
+
+        // --- NUEVAS FUNCIONES PARA EL CÍRCULO DE PROGRESO ---
+        function calculateWeightedProgress(tasksArray) {
+            if (!tasksArray || tasksArray.length === 0) return 0;
+            const totalValue = tasksArray.reduce((sum, task) => sum + (task.value || 0), 0);
+            if (totalValue === 0) return 0;
+            const completedValue = tasksArray
+                .filter(task => task.completed)
+                .reduce((sum, task) => sum + (task.value || 0), 0);
+            return Math.round((completedValue / totalValue) * 100);
+        }
+
+        function createProgressCircle(percentage) {
+            const size = 50;
+            const strokeWidth = 5;
+            const radius = (size / 2) - (strokeWidth * 2);
+            const circumference = radius * 2 * Math.PI;
+            const offset = circumference - (percentage / 100) * circumference;
+
+            return `
+                <div class="relative w-12 h-12">
+                    <svg class="w-full h-full" viewBox="0 0 ${size} ${size}">
+                        <circle class="progress-circle-bg" stroke-width="${strokeWidth}" cx="${size/2}" cy="${size/2}" r="${radius}"></circle>
+                        <circle class="progress-circle-fg" stroke-width="${strokeWidth}" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" cx="${size/2}" cy="${size/2}" r="${radius}"></circle>
+                    </svg>
+                    <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-[rgb(var(--color-primary-accent))]">${percentage}%</span>
+                </div>
+            `;
+        }
+
 
         // Eventos para horario
         let isFilling = false;
