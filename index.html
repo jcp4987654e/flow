@@ -35,20 +35,84 @@
             display: grid;
             grid-template-columns: 60px repeat(7, 1fr);
             grid-template-rows: auto repeat(48, 40px);
+            user-select: none;
         }
         .time-indicator { grid-column: 2 / span 7; pointer-events: none; }
-        #pomodoro-timer.pomo-active { 
-            box-shadow: 0 0 20px rgba(var(--color-primary), 0.5); 
-            border-color: rgba(var(--color-primary-accent));
-        }
         #avatar-container {
             transition: transform 0.3s ease;
         }
         #avatar-container:hover {
             transform: scale(1.05);
         }
-        .cell-selected {
-            background-color: rgba(var(--color-primary), 0.2) !important;
+        #robot-avatar path {
+            transition: d 0.3s ease-in-out;
+        }
+        .schedule-cell {
+            position: relative;
+            overflow: hidden;
+            white-space: nowrap;
+            padding: 2px 4px; /* Added padding */
+        }
+        .schedule-cell:focus, .schedule-cell.selected {
+            outline: 2px solid rgb(var(--color-primary-accent));
+            box-shadow: 0 0 10px rgba(var(--color-primary), 0.3);
+            z-index: 10;
+        }
+        .context-menu {
+            position: absolute;
+            z-index: 1000;
+            background-color: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            padding: 8px;
+            min-width: 180px;
+        }
+        .context-menu-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+        }
+        .context-menu-item:hover {
+            background-color: #f1f5f9;
+        }
+        .color-palette {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 4px;
+            margin-top: 8px;
+        }
+        .color-swatch {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.2s;
+        }
+        .color-swatch:hover {
+            transform: scale(1.1);
+        }
+        .fill-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: rgb(var(--color-primary-accent));
+            border: 2px solid white;
+            bottom: -2px;
+            right: -2px;
+            cursor: crosshair;
+            z-index: 20;
+            display: none; /* Hidden by default */
+        }
+        .schedule-cell.selected .fill-handle {
+            display: block; /* Show on selected cell */
+        }
+        .cell-highlight-fill {
+            box-shadow: inset 0 0 0 2px rgb(var(--color-primary-accent));
+            background-color: rgba(var(--color-primary), 0.1);
         }
     </style>
 </head>
@@ -93,6 +157,10 @@
                         <svg class="h-5 w-5 mr-3" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3.5A1.5 1.5 0 0111.5 5v1.618a3.5 3.5 0 015.153 2.533A3.5 3.5 0 0116.5 15H3.5a3.5 3.5 0 01-1.806-6.35A3.5 3.5 0 016.5 5.118V5A1.5 1.5 0 018 3.5h2zM12 5V4H8v1h4z" /></svg>
                         Estadísticas
                     </a>
+                    <a href="#" id="view-pomodoro" class="view-btn flex items-center px-3 py-2 text-sm font-medium rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
+                        <svg class="h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clip-rule="evenodd" /></svg>
+                        Pomodoro
+                    </a>
                 </div>
             </nav>
             <div class="mt-6 space-y-4">
@@ -123,8 +191,10 @@
 
     <!-- Modales y elementos flotantes -->
     <div id="modal-container"></div>
-    <div id="pomodoro-timer" class="fixed bottom-5 right-5 bg-white dark:bg-slate-800 p-4 rounded-lg shadow-2xl w-64 border border-slate-200 dark:border-slate-700 transition-all"></div>
-    <div id="avatar-container" class="fixed bottom-5 left-5 flex items-end space-x-2"></div>
+    <!-- MODIFICADO: Clases para centrar el avatar -->
+    <div id="avatar-container" class="fixed bottom-5 left-1/2 -translate-x-1/2 flex items-end space-x-2 cursor-pointer"></div>
+    <div id="context-menu-container"></div>
+
 
     <script>
     // --- SCRIPT COMPLETO DE LA APLICACIÓN ---
@@ -132,24 +202,58 @@
         // --- ESTADO Y DATOS ---
         let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
         let goals = JSON.parse(localStorage.getItem('goals')) || [];
+        let scheduleData = JSON.parse(localStorage.getItem('scheduleData')) || {};
         let currentView = 'daily';
         
         let pomodoroSettings = JSON.parse(localStorage.getItem('pomodoroSettings')) || { work: 25, break: 5 };
         let pomodoro = { timer: null, timeLeft: pomodoroSettings.work * 60, isActive: false, mode: 'work' };
         
         const CATEGORIES = {
-            work:     { label: 'Trabajo',  color: '#3b82f6', light: '#dbeafe' },
-            personal: { label: 'Personal', color: '#14b8a6', light: '#ccfbf1' },
-            study:    { label: 'Estudio',  color: '#f59e0b', light: '#fef3c7' },
-            health:   { label: 'Salud',    color: '#f43f5e', light: '#ffe4e6' },
+            work:     { label: 'Trabajo',  color: '#3b82f6', light: '#dbeafe', keywords: ['trabajo', 'reunión', 'proyecto', 'email', 'reporte', 'llamada'], emoji: '💼' },
+            personal: { label: 'Personal', color: '#14b8a6', light: '#ccfbf1', keywords: ['comprar', 'amigos', 'familia', 'cita', 'mandado', 'limpiar'], emoji: '🏠' },
+            study:    { label: 'Estudio',  color: '#f59e0b', light: '#fef3c7', keywords: ['estudiar', 'clase', 'leer', 'curso', 'aprender', 'examen'], emoji: '📚' },
+            health:   { label: 'Salud',    color: '#f43f5e', light: '#ffe4e6', keywords: ['ejercicio', 'gimnasio', 'correr', 'meditar', 'doctor', 'salud'], emoji: '💪' },
+        };
+
+        const MESSAGES = {
+            noTasks: [
+                "Un lienzo en blanco. ¿Qué obra maestra crearemos hoy?",
+                "¡Día nuevo, metas nuevas! Añade tu primera tarea para empezar.",
+                "Mi sistema está listo. ¿Cuál es el plan para hoy?",
+                "¡Hola! Soy Flowy. ¡Vamos a organizar este día juntos!"
+            ],
+            startDay: [
+                "La lista está lista. ¡Un pequeño paso es todo lo que se necesita para empezar!",
+                "¡El primer paso es el más importante! ¿A por cuál vamos?",
+                "¡Un día productivo te espera! ¿Empezamos?",
+                "¡Todo listo para triunfar! ¿Cuál es la primera misión?"
+            ],
+            inProgress: [
+                "¡Excelente progreso! Sigamos así.",
+                "¡Una tarea menos, un paso más cerca de tus metas!",
+                "¡Estás en racha! No te detengas ahora.",
+                "¡Cada tarea completada es una victoria! ¡Vamos por la siguiente!"
+            ],
+            almostDone: [
+                "¡Ya casi lo tienes! ¡El último esfuerzo vale la pena!",
+                "¡Estás a punto de lograrlo! ¡Qué gran día!",
+                "Solo queda un poco más. ¡Puedes hacerlo!",
+                "¡La recta final! ¡Vamos a terminar con fuerza!"
+            ],
+            allDone: [
+                "¡Misión cumplida! Has conquistado el día. ¡A descansar!",
+                "¡Felicidades! Todas las tareas completadas. ¡Productividad al máximo!",
+                "¡Increíble! Has terminado todo por hoy. ¡Disfruta tu tiempo libre!",
+                "Sistema... en modo... celebración. ¡Lo lograste! 🎉"
+            ]
         };
 
         // --- SELECTORES DEL DOM ---
         const mainContent = document.getElementById('main-content');
         const viewButtons = document.querySelectorAll('.view-btn');
         const modalContainer = document.getElementById('modal-container');
-        const pomodoroContainer = document.getElementById('pomodoro-timer');
         const avatarContainer = document.getElementById('avatar-container');
+        const contextMenuContainer = document.getElementById('context-menu-container');
         const htmlEl = document.documentElement;
 
         // --- INICIALIZACIÓN ---
@@ -166,7 +270,6 @@
 
         function renderAll() {
             renderCurrentView();
-            renderPomodoro();
             renderAvatar('auto');
         }
 
@@ -181,6 +284,7 @@
                 case 'monthly': renderMonthlyView(); break;
                 case 'goals': renderGoalsView(); break;
                 case 'stats': renderStatsView(); break;
+                case 'pomodoro': renderPomodoroView(); break;
                 default: renderDailyView();
             }
         }
@@ -189,6 +293,7 @@
         function saveData() {
             localStorage.setItem('tasks', JSON.stringify(tasks));
             localStorage.setItem('goals', JSON.stringify(goals));
+            localStorage.setItem('scheduleData', JSON.stringify(scheduleData));
             localStorage.setItem('pomodoroSettings', JSON.stringify(pomodoroSettings));
         }
         
@@ -239,20 +344,20 @@
         // --- RENDERIZADO DE VISTAS ---
         function renderHeader(title, subtitle, actions = []) {
              const buttonsHTML = actions.map(action => {
-                if (action.type === 'add') {
-                    return `<button class="add-context-btn bg-[rgb(var(--color-primary-accent))] text-white flex items-center px-4 py-2 rounded-md font-medium hover:opacity-90 transition-all hover:scale-105 shadow-md hover:shadow-lg">
-                        <svg class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" /></svg>
-                        ${action.text}
-                    </button>`;
-                }
-                if (action.type === 'export') {
-                     return `<button class="export-pdf-btn bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center px-4 py-2 rounded-md font-medium hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors" data-view="${action.view}">
-                        <svg class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3.5A1.5 1.5 0 0111.5 5v1.618a3.5 3.5 0 015.153 2.533A3.5 3.5 0 0116.5 15H3.5a3.5 3.5 0 01-1.806-6.35A3.5 3.5 0 016.5 5.118V5A1.5 1.5 0 018 3.5h2zM12 5V4H8v1h4z" /></svg>
-                        Exportar PDF
-                    </button>`;
-                }
-                return '';
-            }).join('');
+                 if (action.type === 'add') {
+                     return `<button class="add-context-btn bg-[rgb(var(--color-primary-accent))] text-white flex items-center px-4 py-2 rounded-md font-medium hover:opacity-90 transition-all hover:scale-105 shadow-md hover:shadow-lg">
+                         <svg class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" /></svg>
+                         ${action.text}
+                     </button>`;
+                 }
+                 if (action.type === 'export') {
+                      return `<button class="export-pdf-btn bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center px-4 py-2 rounded-md font-medium hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors" data-view="${action.view}">
+                         <svg class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3.5A1.5 1.5 0 0111.5 5v1.618a3.5 3.5 0 015.153 2.533A3.5 3.5 0 0116.5 15H3.5a3.5 3.5 0 01-1.806-6.35A3.5 3.5 0 016.5 5.118V5A1.5 1.5 0 018 3.5h2zM12 5V4H8v1h4z" /></svg>
+                         Exportar PDF
+                     </button>`;
+                 }
+                 return '';
+             }).join('');
 
             return `
                 <header id="view-header" class="view-header mb-6 bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg flex items-center justify-between animate-fadeInUp">
@@ -324,57 +429,42 @@
         }
 
         function renderScheduleView() {
-            const today = new Date();
-            const dayOfWeek = today.getDay();
-            const startOfWeek = new Date(today);
-            startOfWeek.setDate(today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
-            startOfWeek.setHours(0, 0, 0, 0);
-
-            let gridHTML = '<div class="sticky top-0 bg-white dark:bg-slate-800 z-10"></div>';
+            let gridHTML = '<div class="sticky top-0 bg-white dark:bg-slate-800 z-10"></div>'; // Placeholder for time column
             const weekdays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-            for (let i = 0; i < 7; i++) {
-                const day = new Date(startOfWeek);
-                day.setDate(day.getDate() + i);
-                const isToday = day.toDateString() === new Date().toDateString();
-                gridHTML += `<div class="sticky top-0 bg-white dark:bg-slate-800 z-10 text-center p-2 border-b border-slate-200 dark:border-slate-700"><p class="font-semibold text-sm">${weekdays[i]}</p><p class="text-2xl font-bold ${isToday ? 'text-[rgb(var(--color-primary-accent))]' : ''}">${day.getDate()}</p></div>`;
-            }
+            weekdays.forEach(day => {
+                gridHTML += `<div class="sticky top-0 bg-white dark:bg-slate-800 z-10 text-center p-2 border-b border-slate-200 dark:border-slate-700"><p class="font-semibold text-sm">${day}</p></div>`;
+            });
 
-            for (let i = 0; i < 48; i++) {
+            for (let i = 0; i < 48; i++) { // 48 slots de 30 minutos
                 const hour = Math.floor(i / 2);
                 const minute = i % 2 === 0 ? '00' : '30';
                 const time = `${String(hour).padStart(2, '0')}:${minute}`;
-                gridHTML += `<div class="text-right pr-2 text-xs text-slate-400 -mt-2">${hour > 0 && minute === '00' ? time : ''}</div>`;
+                
+                gridHTML += `<div class="text-right pr-2 text-xs text-slate-400 -mt-2.5">${minute === '00' ? time : ''}</div>`;
+                
                 for (let d = 0; d < 7; d++) {
-                    const day = new Date(startOfWeek);
-                    day.setDate(day.getDate() + d);
-                    const dateString = day.toISOString().split('T')[0];
-                    gridHTML += `<div class="schedule-cell border-r border-b border-slate-100 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" data-date="${dateString}" data-time="${time}" data-day-index="${d}" data-time-index="${i}"></div>`;
+                    const key = `d${d}-t${i}`;
+                    const cellData = scheduleData[key];
+                    const text = cellData?.text || '';
+                    const bgColor = cellData?.bgColor || 'transparent';
+                    const fontSize = cellData?.fontSize || '12px';
+                    const textColor = cellData?.textColor || 'inherit'; // NUEVO: Color de letra
+
+                    gridHTML += `
+                        <div class="schedule-cell border-r border-b border-slate-100 dark:border-slate-700 text-xs" 
+                             data-key="${key}" 
+                             data-day="${d}"
+                             data-time-slot="${i}"
+                             style="background-color: ${bgColor}; font-size: ${fontSize}; color: ${textColor};">
+                            ${text}
+                            <div class="fill-handle"></div>
+                        </div>`;
                 }
             }
 
-            const tasksHTML = tasks.filter(t => {
-                const taskDate = new Date(t.date);
-                const endOfWeek = new Date(startOfWeek);
-                endOfWeek.setDate(startOfWeek.getDate() + 6);
-                return taskDate >= startOfWeek && taskDate <= endOfWeek && t.startTime && t.endTime;
-            }).map(task => {
-                const dayIndex = (new Date(task.date).getDay() + 6) % 7;
-                const [startH, startM] = task.startTime.split(':').map(Number);
-                const [endH, endM] = task.endTime.split(':').map(Number);
-                const startRow = startH * 2 + (startM / 30) + 2;
-                const endRow = endH * 2 + (endM / 30) + 2;
-                const category = CATEGORIES[task.category];
-                const style = category ? `background-color: ${category.light}; color: ${category.color}; border-color: ${category.color};` : '';
-                return `<div class="task-block p-2 rounded-md overflow-hidden text-xs font-medium cursor-pointer border" style="${style} grid-column: ${dayIndex + 2}; grid-row: ${startRow} / ${endRow};" data-task-id="${task.id}">${task.title}</div>`;
-            }).join('');
-
-            const now = new Date();
-            const nowMinutes = now.getHours() * 60 + now.getMinutes();
-            const topPosition = (nowMinutes / (24 * 60)) * (48 * 40);
-            const timeIndicatorHTML = `<div class="time-indicator absolute h-0.5 bg-rose-500" style="top: ${topPosition}px;"></div>`;
-
-            mainContent.innerHTML = renderHeader('Horarios de la Semana', 'Planifica tus tareas y eventos', [{type: 'export', view: 'schedule'}]) + `<div id="export-content" class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-lg overflow-auto" style="height: 70vh;"><div id="schedule-grid-container" class="schedule-grid relative">${gridHTML}${tasksHTML}${timeIndicatorHTML}</div></div>`;
+            mainContent.innerHTML = renderHeader('Horarios', 'Planifica tus bloques de tiempo visualmente', [{type: 'export', view: 'schedule'}]) + `<div id="export-content" class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-lg overflow-auto" style="height: 70vh;"><div id="schedule-grid-container" class="schedule-grid relative">${gridHTML}</div></div>`;
         }
+
 
         function renderGoalsView() {
             let goalsHTML = goals.length > 0
@@ -393,6 +483,38 @@
             renderCharts();
         }
 
+        function renderPomodoroView() {
+            const minutes = Math.floor(pomodoro.timeLeft / 60);
+            const seconds = pomodoro.timeLeft % 60;
+
+            mainContent.innerHTML = renderHeader('Temporizador Pomodoro', 'Concéntrate en bloques de tiempo', []) + `
+                <div id="export-content" class="flex flex-col items-center justify-center bg-white dark:bg-slate-800 p-8 rounded-lg shadow-lg animate-fadeInUp">
+                    <div class="text-center">
+                        <p class="text-lg font-medium text-slate-500 dark:text-slate-400">${pomodoro.mode === 'work' ? 'Tiempo de Enfoque' : 'Tiempo de Descanso'}</p>
+                        <p id="pomo-display-time" class="text-8xl font-bold font-mono my-4">${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}</p>
+                    </div>
+                    <div class="flex space-x-4 my-6">
+                        <button id="pomo-start-pause" class="px-8 py-3 text-lg rounded-md bg-[rgb(var(--color-primary-accent))] text-white font-semibold shadow-lg hover:opacity-90 transition-transform hover:scale-105">${pomodoro.isActive ? 'Pausa' : 'Iniciar'}</button>
+                        <button id="pomo-reset" class="px-8 py-3 text-lg rounded-md bg-slate-200 dark:bg-slate-700 font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 transition">Reiniciar</button>
+                    </div>
+                    <div class="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 w-full max-w-md">
+                        <h3 class="text-center font-bold text-lg mb-4">Configuración</h3>
+                        <div class="flex items-center justify-between space-x-4">
+                            <div class="flex-1">
+                                <label class="text-sm">Trabajo (min)</label>
+                                <input type="number" id="pomo-work-input" value="${pomodoroSettings.work}" class="w-full p-2 mt-1 rounded bg-slate-100 dark:bg-slate-700">
+                            </div>
+                            <div class="flex-1">
+                                <label class="text-sm">Descanso (min)</label>
+                                <input type="number" id="pomo-break-input" value="${pomodoroSettings.break}" class="w-full p-2 mt-1 rounded bg-slate-100 dark:bg-slate-700">
+                            </div>
+                            <button id="pomo-save-settings" class="self-end px-4 py-2 text-sm text-center text-white bg-slate-500 hover:bg-slate-600 rounded-md">Guardar</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         // --- RENDERIZADO DE COMPONENTES ---
         function createTaskCard(task) {
             const category = CATEGORIES[task.category];
@@ -409,7 +531,7 @@
                     <div class="flex items-start">
                         <input type="checkbox" data-task-id="${task.id}" class="task-checkbox h-5 w-5 rounded border-slate-300 text-[rgb(var(--color-primary-accent))] focus:ring-[rgb(var(--color-primary-accent))] mt-1 cursor-pointer" ${task.completed ? 'checked' : ''}>
                         <div class="ml-3 flex-1 cursor-pointer">
-                            <p class="font-medium ${task.completed ? 'completed-task text-slate-500' : ''}">${task.title}</p>
+                            <p class="font-medium ${task.completed ? 'completed-task text-slate-500' : ''}"><span class="mr-2">${task.emoji || ''}</span>${task.title}</p>
                             ${task.startTime ? `<p class="text-xs text-slate-500 dark:text-slate-400">${task.startTime} - ${task.endTime || ''}</p>` : ''}
                             <div class="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center space-x-2">
                                 <span class="bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full font-medium">Valor: ${task.value}</span>
@@ -460,71 +582,47 @@
             });
         }
         
-        function renderPomodoro() {
-            const minutes = Math.floor(pomodoro.timeLeft / 60);
-            const seconds = pomodoro.timeLeft % 60;
-            pomodoroContainer.innerHTML = `
-                <div class="flex justify-between items-center mb-2">
-                    <h4 class="font-bold text-lg">Pomodoro</h4>
-                    <button id="pomo-settings-btn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17a.75.75 0 01.75.75v1.25a.75.75 0 01-1.5 0V3.92A6.5 6.5 0 1016.08 7.5h1.25a.75.75 0 010 1.5h-1.25a6.5 6.5 0 10-4.59 8.83v-1.25a.75.75 0 011.5 0v1.25a.75.75 0 01-.75.75h-3a.75.75 0 01-.75-.75V15a.75.75 0 011.5 0v1.08a6.5 6.5 0 10-4.59-8.83h1.25a.75.75 0 010-1.5H3.92A6.5 6.5 0 108.51 3.17v1.25a.75.75 0 01-1.5 0V3.92a.75.75 0 01.75-.75h3z" clip-rule="evenodd" /></svg>
-                    </button>
-                </div>
-                <div id="pomo-display" class="text-center">
-                    <span class="text-4xl font-mono font-bold">${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}</span>
-                    <p class="text-sm text-slate-500">${pomodoro.mode === 'work' ? 'Enfoque' : 'Descanso'}</p>
-                </div>
-                 <div id="pomo-settings" class="hidden mt-2 space-y-2">
-                    <div>
-                        <label class="text-xs">Trabajo (min)</label>
-                        <input type="number" id="pomo-work-input" value="${pomodoroSettings.work}" class="w-full p-1 rounded bg-slate-100 dark:bg-slate-700">
-                    </div>
-                    <div>
-                        <label class="text-xs">Descanso (min)</label>
-                        <input type="number" id="pomo-break-input" value="${pomodoroSettings.break}" class="w-full p-1 rounded bg-slate-100 dark:bg-slate-700">
-                    </div>
-                     <button id="pomo-save-settings" class="w-full text-sm text-center text-white bg-[rgb(var(--color-primary-accent))] rounded-md py-1">Guardar</button>
-                </div>
-                <div class="flex justify-around mt-3">
-                    <button id="pomo-start-pause" class="px-4 py-1 rounded-md bg-[rgba(var(--color-primary-light))] text-[rgb(var(--color-primary-accent))]">${pomodoro.isActive ? 'Pausa' : 'Inicio'}</button>
-                    <button id="pomo-reset" class="px-4 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700">Reset</button>
-                </div>
-            `;
-            pomodoro.isActive ? pomodoroContainer.classList.add('pomo-active') : pomodoroContainer.classList.remove('pomo-active');
+        function updatePomodoroDisplay() {
+            if (currentView !== 'pomodoro') return;
+            const display = document.getElementById('pomo-display-time');
+            if (display) {
+                const minutes = Math.floor(pomodoro.timeLeft / 60);
+                const seconds = pomodoro.timeLeft % 60;
+                display.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }
         }
 
-        function renderAvatar(face = 'neutral') {
+        function renderAvatar(face = 'neutral', message = '') {
             const todayStr = new Date().toISOString().split('T')[0];
             const todaysTasks = tasks.filter(t => t.date === todayStr);
             const completedCount = todaysTasks.filter(t => t.completed).length;
             const totalCount = todaysTasks.length;
             
             let currentFace = face;
-            let message = '';
+            let currentMessage = message;
+
+            const getRandomMessage = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
             if (face === 'auto') {
                 if (totalCount === 0) {
                     currentFace = 'neutral';
+                    currentMessage = getRandomMessage(MESSAGES.noTasks);
                 } else {
                     const percentage = (completedCount / totalCount) * 100;
                     if (percentage === 100) {
                         currentFace = 'satisfied';
-                    } else if (percentage >= 50) {
+                        currentMessage = getRandomMessage(MESSAGES.allDone);
+                    } else if (percentage >= 75) {
                         currentFace = 'satisfied';
+                        currentMessage = getRandomMessage(MESSAGES.almostDone);
+                    } else if (percentage > 0) {
+                        currentFace = 'happy';
+                        currentMessage = getRandomMessage(MESSAGES.inProgress).replace('${completedCount}', completedCount).replace('${totalCount}', totalCount);
                     } else {
                         currentFace = 'neutral';
+                        currentMessage = getRandomMessage(MESSAGES.startDay);
                     }
                 }
-            }
-            
-            if (totalCount === 0) {
-                message = '¡Añade tareas para empezar!';
-            } else if (completedCount === 0) {
-                message = '¡Vamos a empezar! ¿Cuál es la primera?';
-            } else if (completedCount > 0 && completedCount < totalCount) {
-                message = `¡Buen trabajo! Llevas ${completedCount} de ${totalCount}.`;
-            } else if (completedCount === totalCount) {
-                message = '¡Día perfecto! ¡Has completado todo! 🎉';
             }
             
             const faces = {
@@ -534,8 +632,8 @@
             };
 
             avatarContainer.innerHTML = `
-                <div class="bg-white dark:bg-slate-800 p-2 rounded-lg shadow-lg relative">
-                    <div id="avatar-speech-bubble" class="absolute bottom-full mb-2 w-48 bg-white dark:bg-slate-700 text-sm p-2 rounded-md shadow-md">${message}</div>
+                <div class="bg-white dark:bg-slate-800 p-2 rounded-lg shadow-lg relative bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800">
+                    <div id="avatar-speech-bubble" class="absolute bottom-full mb-2 w-48 bg-white dark:bg-slate-700 text-sm p-3 rounded-lg shadow-xl">${currentMessage}</div>
                     <svg id="robot-avatar" width="60" height="60" viewBox="0 0 30 30" class="fill-none stroke-current text-slate-600 dark:text-slate-300" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="5" y="8" width="20" height="15" rx="2" />
                         <circle cx="10" cy="12" r="0.5" fill="currentColor" />
@@ -549,8 +647,6 @@
 
         // --- LÓGICA DE POMODORO ---
         function handlePomodoro() {
-            document.getElementById('pomo-settings').classList.add('hidden');
-            document.getElementById('pomo-display').classList.remove('hidden');
             pomodoro.isActive = !pomodoro.isActive;
             if (pomodoro.isActive) {
                 pomodoro.timer = setInterval(() => {
@@ -561,13 +657,18 @@
                         new Audio("https://assets.mixkit.co/sfx/preview/mixkit-positive-notification-951.mp3").play();
                         pomodoro.mode = pomodoro.mode === 'work' ? 'break' : 'work';
                         pomodoro.timeLeft = (pomodoro.mode === 'work' ? pomodoroSettings.work : pomodoroSettings.break) * 60;
+                        if(currentView === 'pomodoro') renderCurrentView();
+                    } else {
+                        updatePomodoroDisplay();
                     }
-                    renderPomodoro();
                 }, 1000);
             } else {
                 clearInterval(pomodoro.timer);
             }
-            renderPomodoro();
+            if(currentView === 'pomodoro') {
+                const startPauseBtn = document.getElementById('pomo-start-pause');
+                if (startPauseBtn) startPauseBtn.textContent = pomodoro.isActive ? 'Pausa' : 'Iniciar';
+            }
         }
 
         function resetPomodoro(useSettings = false) {
@@ -580,7 +681,7 @@
             }
             pomodoro.mode = 'work';
             pomodoro.timeLeft = pomodoroSettings.work * 60;
-            renderPomodoro();
+            if(currentView === 'pomodoro') renderCurrentView();
         }
         
         // --- LÓGICA DE MODALES ---
@@ -601,7 +702,7 @@
             }
         }
 
-        function openTaskModal(task = null, prefill = {}) {
+        function openTaskModal(task = null) {
             const isEditing = task !== null;
             const categoryOptions = Object.entries(CATEGORIES).map(([key, value]) => `<option value="${key}" ${task?.category === key ? 'selected' : ''}>${value.label}</option>`).join('');
             const goalOptions = goals.map(g => `<option value="${g.id}" ${task?.goalId == g.id ? 'selected' : ''}>${g.title}</option>`).join('');
@@ -619,12 +720,15 @@
                 </div>
                 <form id="taskForm" class="mt-4 space-y-4 max-h-[70vh] overflow-y-auto pr-2">
                     <input type="hidden" id="taskId" value="${task?.id || ''}">
-                    <input type="text" id="taskTitle" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700" placeholder="Título de la tarea" value="${task?.title || ''}" required>
+                    <div class="flex space-x-2">
+                        <input type="text" id="taskEmoji" class="w-12 p-2 text-center rounded bg-slate-100 dark:bg-slate-700" value="${task?.emoji || ''}" maxlength="2">
+                        <input type="text" id="taskTitle" class="flex-1 w-full p-2 rounded bg-slate-100 dark:bg-slate-700" placeholder="Título de la tarea" value="${task?.title || ''}" required>
+                    </div>
                     <textarea id="taskNotes" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700" placeholder="Añadir notas...">${task?.notes || ''}</textarea>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <input type="date" id="taskDate" value="${task?.date || prefill.date || new Date().toISOString().split('T')[0]}" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700 col-span-1">
-                        <input type="time" id="taskStartTime" step="1800" value="${task?.startTime || prefill.startTime || ''}" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700">
-                        <input type="time" id="taskEndTime" step="1800" value="${task?.endTime || prefill.endTime || ''}" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700">
+                        <input type="date" id="taskDate" value="${task?.date || new Date().toISOString().split('T')[0]}" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700 col-span-1">
+                        <input type="time" id="taskStartTime" step="1800" value="${task?.startTime || ''}" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700">
+                        <input type="time" id="taskEndTime" step="1800" value="${task?.endTime || ''}" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700">
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <select id="taskCategory" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700"><option value="">Categoría</option>${categoryOptions}</select>
@@ -650,6 +754,7 @@
                 </form>
             `;
             openModal(modalContent);
+            document.getElementById('taskTitle').addEventListener('input', autoCategorize);
         }
 
         function openGoalModal(goal = null) {
@@ -685,69 +790,27 @@
         }
 
         // --- LÓGICA DE EVENTOS ---
-        let isSelecting = false;
-        let selectionStartCell = null;
-
-        document.body.addEventListener('mousedown', (e) => {
-            if (e.target.matches('.schedule-cell')) {
-                isSelecting = true;
-                selectionStartCell = e.target;
-                document.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
-                e.target.classList.add('cell-selected');
-            }
-        });
-
-        document.body.addEventListener('mouseover', (e) => {
-            if (isSelecting && e.target.matches('.schedule-cell')) {
-                document.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
-                const startDay = parseInt(selectionStartCell.dataset.dayIndex);
-                const startTime = parseInt(selectionStartCell.dataset.timeIndex);
-                const endDay = parseInt(e.target.dataset.dayIndex);
-                const endTime = parseInt(e.target.dataset.timeIndex);
-
-                const minDay = Math.min(startDay, endDay);
-                const maxDay = Math.max(startDay, endDay);
-                const minTime = Math.min(startTime, endTime);
-                const maxTime = Math.max(startTime, endTime);
-
-                for (let d = minDay; d <= maxDay; d++) {
-                    for (let t = minTime; t <= maxTime; t++) {
-                        const cell = document.querySelector(`.schedule-cell[data-day-index='${d}'][data-time-index='${t}']`);
-                        if (cell) cell.classList.add('cell-selected');
-                    }
-                }
-            }
-        });
-
-        document.body.addEventListener('mouseup', (e) => {
-            if (isSelecting) {
-                isSelecting = false;
-                const selected = document.querySelectorAll('.cell-selected');
-                if (selected.length > 0) {
-                    const firstCell = selected[0];
-                    const lastCell = selected[selected.length - 1];
-                    const startTime = firstCell.dataset.time;
-                    const date = firstCell.dataset.date;
-                    
-                    const lastTimeIndex = parseInt(lastCell.dataset.timeIndex);
-                    const endHour = Math.floor((lastTimeIndex + 1) / 2);
-                    const endMinute = (lastTimeIndex + 1) % 2 === 0 ? '00' : '30';
-                    const endTime = `${String(endHour).padStart(2, '0')}:${endMinute}`;
-
-                    openTaskModal(null, { date, startTime, endTime });
-                }
-                setTimeout(() => {
-                    document.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
-                }, 100);
-            }
-        });
         
+        let avatarTestState = 0;
         document.body.addEventListener('click', (e) => {
-            // Modales
+            if (!e.target.closest('.context-menu')) {
+                closeContextMenu();
+            }
+
             if (e.target.matches('.close-modal-btn')) closeModal();
             if (e.target.matches('.modal-backdrop')) closeModal();
 
-            // Tareas
+            if (e.target.closest('#avatar-container')) {
+                const states = ['neutral', 'happy', 'satisfied'];
+                const messages = [
+                    "Soy Flowy, ¡listo para ayudarte a ser productivo!",
+                    "¡Cada tarea completada es una victoria!",
+                    "¡Un día bien organizado es un día exitoso!"
+                ];
+                avatarTestState = (avatarTestState + 1) % states.length;
+                renderAvatar(states[avatarTestState], messages[avatarTestState]);
+            }
+
             if (e.target.closest('.task-card') && !e.target.matches('.task-checkbox') && !e.target.matches('.subtask-checkbox')) {
                 openTaskModal(tasks.find(t => t.id == e.target.closest('.task-card').dataset.taskId));
             }
@@ -780,7 +843,6 @@
                 renderCurrentView();
             }
 
-            // Metas
             if (e.target.closest('.goal-card')) openGoalModal(goals.find(g => g.id == e.target.closest('.goal-card').dataset.goalId));
             if (e.target.id === 'deleteGoalBtn') {
                 const id = e.target.dataset.id;
@@ -791,20 +853,12 @@
                 renderCurrentView();
             }
 
-            // Pomodoro
             if (e.target.id === 'pomo-start-pause') handlePomodoro();
             if (e.target.id === 'pomo-reset') resetPomodoro();
-            if (e.target.id === 'pomo-settings-btn') {
-                document.getElementById('pomo-settings').classList.toggle('hidden');
-                document.getElementById('pomo-display').classList.toggle('hidden');
-            }
             if (e.target.id === 'pomo-save-settings') {
                 resetPomodoro(true);
-                document.getElementById('pomo-settings').classList.add('hidden');
-                document.getElementById('pomo-display').classList.remove('hidden');
             }
 
-            // Navegación y acciones
             const viewBtn = e.target.closest('.view-btn');
             if (viewBtn) {
                 e.preventDefault();
@@ -824,6 +878,7 @@
              if (e.target.id === 'confirmDeleteYes') {
                 tasks = [];
                 goals = [];
+                scheduleData = {};
                 saveData();
                 closeModal();
                 renderAll();
@@ -833,7 +888,6 @@
                 openTaskModal(task);
             }
 
-            // Temas
             if (e.target.closest('#dark-mode-toggle')) {
                 htmlEl.classList.toggle('dark');
                 document.getElementById('sun-icon').classList.toggle('hidden');
@@ -847,7 +901,6 @@
                 localStorage.setItem('themeColor', themeDot.dataset.color);
             }
 
-            // Subtareas en modal
             if (e.target.id === 'addSubtaskBtn') {
                 const container = document.getElementById('subtasksContainer');
                 const div = document.createElement('div');
@@ -863,14 +916,17 @@
                 e.target.parentElement.remove();
             }
             
-            // Exportar PDF
             if(e.target.closest('.export-pdf-btn')) {
                 exportViewAsPDF(e.target.closest('.export-pdf-btn').dataset.view);
             }
             
-            // Pantalla Completa
             if (e.target.closest('#fullscreen-toggle')) {
                 toggleFullScreen();
+            }
+            
+            if (e.target.matches('.schedule-cell')) {
+                document.querySelectorAll('.schedule-cell.selected').forEach(cell => cell.classList.remove('selected'));
+                e.target.classList.add('selected');
             }
         });
 
@@ -885,6 +941,7 @@
 
                 const taskData = {
                     title: e.target.querySelector('#taskTitle').value,
+                    emoji: e.target.querySelector('#taskEmoji').value,
                     notes: e.target.querySelector('#taskNotes').value,
                     date: e.target.querySelector('#taskDate').value,
                     startTime: e.target.querySelector('#taskStartTime').value,
@@ -922,6 +979,20 @@
             closeModal();
             renderAll();
         });
+
+        function autoCategorize(event) {
+            const title = event.target.value.toLowerCase();
+            const categorySelect = document.getElementById('taskCategory');
+            const emojiInput = document.getElementById('taskEmoji');
+
+            for (const [key, value] of Object.entries(CATEGORIES)) {
+                if (value.keywords.some(k => title.includes(k))) {
+                    categorySelect.value = key;
+                    if (!emojiInput.value) emojiInput.value = value.emoji;
+                    return;
+                }
+            }
+        }
 
         function applyTheme(color) {
             htmlEl.style.setProperty('--color-primary', color);
@@ -989,6 +1060,204 @@
             document.getElementById('icon-enter-fullscreen').classList.toggle('hidden', isFullscreen);
             document.getElementById('icon-exit-fullscreen').classList.toggle('hidden', !isFullscreen);
         });
+
+        // --- NUEVA LÓGICA PARA EL HORARIO INTERACTIVO ---
+        
+        function closeContextMenu() {
+            contextMenuContainer.innerHTML = '';
+        }
+
+        function openContextMenu(e, cell) {
+            e.preventDefault();
+            closeContextMenu();
+            
+            const menu = document.createElement('div');
+            menu.className = 'context-menu';
+            menu.style.left = `${e.pageX}px`;
+            menu.style.top = `${e.pageY}px`;
+
+            const colors = ['#fecaca', '#fed7aa', '#fef08a', '#d9f99d', '#bfdbfe', '#e9d5ff', '#fbcfe8', '#ffffff'];
+            const colorPaletteHTML = colors.map(color => `<div class="color-swatch" style="background-color:${color};" data-color="${color}"></div>`).join('');
+
+            menu.innerHTML = `
+                <div class="context-menu-item" data-action="change-text">
+                    <svg class="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
+                    Cambiar Texto
+                </div>
+                <div class="context-menu-item" data-action="change-color">
+                     <svg class="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 2zM10 15a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 15zM10 7a3 3 0 100 6 3 3 0 000-6z" /><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-1.414 1.414a1 1 0 01-1.414-1.414l1.414-1.414a1 1 0 011.414 0zM5.293 16.707a1 1 0 010-1.414l1.414-1.414a1 1 0 111.414 1.414L6.707 16.707a1 1 0 01-1.414 0zM17 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5a.75.75 0 01.75.75zM4 10a.75.75 0 01-.75.75H2a.75.75 0 010-1.5h1.25a.75.75 0 01.75.75zM14.707 14.707a1 1 0 01-1.414 0l-1.414-1.414a1 1 0 011.414-1.414l1.414 1.414a1 1 0 010 1.414zM6.707 6.707a1 1 0 01-1.414 0L3.879 5.293a1 1 0 111.414-1.414L6.707 5.293a1 1 0 010 1.414z" clip-rule="evenodd" /></svg>
+                    Cambiar Color
+                </div>
+                <div class="color-palette">${colorPaletteHTML}</div>
+            `;
+            contextMenuContainer.appendChild(menu);
+
+            menu.addEventListener('click', (menuEvent) => {
+                const action = menuEvent.target.closest('[data-action]')?.dataset.action;
+                const color = menuEvent.target.closest('[data-color]')?.dataset.color;
+                
+                if (action === 'change-text') {
+                    openScheduleCellModal(cell);
+                    closeContextMenu();
+                }
+                if (color) {
+                    updateCellData(cell.dataset.key, { bgColor: color });
+                    cell.style.backgroundColor = color;
+                    saveData();
+                    closeContextMenu();
+                }
+            });
+        }
+        
+        // MODIFICADO: Modal para editar celda ahora incluye color de letra y emojis
+        function openScheduleCellModal(cell) {
+            const key = cell.dataset.key;
+            const cellData = scheduleData[key] || {};
+            const emojis = ['😊', '🚀', '💼', '📚', '💪', '🏠', '✅', '❌', '🔥', '💡', '🎉', '📌', '📞', '☕', '🍕', '🏃'];
+            const emojiBoardHTML = emojis.map(emoji => `<button type="button" class="emoji-btn text-2xl p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">${emoji}</button>`).join('');
+            
+            const textColors = ['#1e293b', '#f8fafc', '#64748b', '#ef4444', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899'];
+            const textColorPaletteHTML = textColors.map(color => `<div class="color-swatch text-color-swatch" style="background-color:${color};" data-color="${color}"></div>`).join('');
+
+            const modalContent = `
+                <h3 class="text-xl font-semibold mb-4">Editar Celda</h3>
+                <form id="scheduleCellForm">
+                    <div class="mb-4">
+                        <label for="cellText" class="block text-sm font-medium mb-1">Texto</label>
+                        <input type="text" id="cellText" value="${cellData.text || ''}" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700">
+                    </div>
+                    <div class="mb-4">
+                        <label for="cellFontSize" class="block text-sm font-medium mb-1">Tamaño de letra (px)</label>
+                        <input type="number" id="cellFontSize" value="${(cellData.fontSize || '12px').replace('px','')}" class="w-full p-2 rounded bg-slate-100 dark:bg-slate-700">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-2">Color de Letra</label>
+                        <div class="flex items-center gap-2">
+                            <input type="color" id="cellTextColor" value="${cellData.textColor || '#1e293b'}" class="w-10 h-10 p-1 bg-transparent border-none rounded-md cursor-pointer">
+                            <div class="color-palette !grid-cols-8 !mt-0">${textColorPaletteHTML}</div>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-2">Añadir Emoji</label>
+                        <div class="grid grid-cols-8 gap-1 p-2 bg-slate-100 dark:bg-slate-700 rounded-lg">
+                            ${emojiBoardHTML}
+                        </div>
+                    </div>
+                    <div class="flex justify-end pt-4 space-x-2 border-t border-slate-200 dark:border-slate-700">
+                        <button type="button" class="close-modal-btn bg-slate-200 text-slate-800 px-4 py-2 rounded-md font-medium hover:bg-slate-300">Cancelar</button>
+                        <button type="submit" class="bg-[rgb(var(--color-primary-accent))] text-white px-4 py-2 rounded-md font-medium">Guardar</button>
+                    </div>
+                </form>
+            `;
+            openModal(modalContent);
+
+            // Añadir listeners para los nuevos elementos del modal
+            document.querySelectorAll('.emoji-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const textInput = document.getElementById('cellText');
+                    textInput.value += btn.textContent;
+                    textInput.focus();
+                };
+            });
+            document.querySelectorAll('.text-color-swatch').forEach(swatch => {
+                swatch.onclick = () => {
+                    document.getElementById('cellTextColor').value = swatch.dataset.color;
+                };
+            });
+
+            document.getElementById('scheduleCellForm').onsubmit = (e) => {
+                e.preventDefault();
+                const text = document.getElementById('cellText').value;
+                const fontSize = document.getElementById('cellFontSize').value + 'px';
+                const textColor = document.getElementById('cellTextColor').value;
+                
+                updateCellData(key, { text, fontSize, textColor });
+                cell.textContent = text;
+                cell.style.fontSize = fontSize;
+                cell.style.color = textColor;
+                
+                if (!cell.querySelector('.fill-handle')) {
+                    const handle = document.createElement('div');
+                    handle.className = 'fill-handle';
+                    cell.appendChild(handle);
+                }
+                saveData();
+                closeModal();
+            };
+        }
+
+        function updateCellData(key, newData) {
+            scheduleData[key] = { ...(scheduleData[key] || {}), ...newData };
+        }
+
+        // Eventos para horario
+        let isFilling = false;
+        let fillStartCell = null;
+
+        document.body.addEventListener('contextmenu', (e) => {
+            if (e.target.matches('.schedule-cell')) {
+                openContextMenu(e, e.target);
+            }
+        });
+
+        document.body.addEventListener('mousedown', (e) => {
+            if (e.target.matches('.fill-handle')) {
+                isFilling = true;
+                fillStartCell = e.target.closest('.schedule-cell');
+                e.preventDefault(); // Prevent text selection
+            }
+        });
+
+        document.body.addEventListener('mouseover', (e) => {
+            if (isFilling && e.target.matches('.schedule-cell')) {
+                document.querySelectorAll('.cell-highlight-fill').forEach(c => c.classList.remove('cell-highlight-fill'));
+                
+                const startDay = parseInt(fillStartCell.dataset.day);
+                const startTimeSlot = parseInt(fillStartCell.dataset.timeSlot);
+                const currentDay = parseInt(e.target.dataset.day);
+                const currentTimeSlot = parseInt(e.target.dataset.timeSlot);
+
+                if (startDay === currentDay && currentTimeSlot >= startTimeSlot) {
+                    for (let i = startTimeSlot; i <= currentTimeSlot; i++) {
+                        const cellToHighlight = document.querySelector(`.schedule-cell[data-day='${startDay}'][data-time-slot='${i}']`);
+                        if (cellToHighlight) {
+                            cellToHighlight.classList.add('cell-highlight-fill');
+                        }
+                    }
+                }
+            }
+        });
+
+        document.body.addEventListener('mouseup', (e) => {
+            if (isFilling) {
+                const fillSourceData = scheduleData[fillStartCell.dataset.key] || { 
+                    text: fillStartCell.childNodes[0].nodeValue.trim(), 
+                    bgColor: fillStartCell.style.backgroundColor, 
+                    fontSize: fillStartCell.style.fontSize,
+                    textColor: fillStartCell.style.color
+                };
+                
+                document.querySelectorAll('.cell-highlight-fill').forEach(cell => {
+                    updateCellData(cell.dataset.key, fillSourceData);
+                    cell.childNodes[0].nodeValue = fillSourceData.text || '';
+                    cell.style.backgroundColor = fillSourceData.bgColor || 'transparent';
+                    cell.style.fontSize = fillSourceData.fontSize || '12px';
+                    cell.style.color = fillSourceData.textColor || 'inherit';
+
+                    if (!cell.querySelector('.fill-handle')) {
+                        const handle = document.createElement('div');
+                        handle.className = 'fill-handle';
+                        cell.appendChild(handle);
+                    }
+                    cell.classList.remove('cell-highlight-fill');
+                });
+                
+                saveData();
+                isFilling = false;
+                fillStartCell = null;
+            }
+        });
+
 
         // --- INICIALIZAR LA APP ---
         init();
